@@ -25,7 +25,7 @@ cargo run --release -- --seed 42 --steps 400 --layers all --out out
 That writes every debug layer for the world pictured above.
 
 ```
---seed <N>           World seed (default 1)
+--seed <N>           World seed (default clock milliseconds)
 --steps <N>          Simulation iterations (default 240)
 --plates <N>         Number of tectonic plates (default 32)
 --continental <F>    Fraction of the world that is continental crust (default 0.4)

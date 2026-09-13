@@ -44,7 +44,7 @@ USAGE:
     voronoi-geology [OPTIONS]
 
 OPTIONS:
-    --seed <N>           World seed (default 1)
+    --seed <N>           World seed (default clock millis)
     --steps <N>          Simulation iterations (default 240)
     --plates <N>         Number of tectonic plates (default 32)
     --continental <F>    Fraction of plates that are continental (default 0.4)

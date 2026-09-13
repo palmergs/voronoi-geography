@@ -15,6 +15,12 @@ use crate::tectonics::{TectonicParams, Tectonics, mean_crust_age};
 use crate::voronoi::{self, Warp};
 use crate::world::{DEFAULT_HEIGHT, DEFAULT_WIDTH, World};
 
+/// Clock based seed
+fn clock_seed() -> [u64; 2] {
+    let a = std::time::UNIX_EPOCH.elapsed().unwrap().as_millis();
+    [(a >> 64) as u64, a as u64]
+}
+
 #[derive(Clone, Copy, Debug)]
 pub struct SimulationParams {
     pub width: usize,
@@ -66,7 +72,7 @@ impl Default for SimulationParams {
         SimulationParams {
             width: DEFAULT_WIDTH,
             height: DEFAULT_HEIGHT,
-            seed: 1,
+            seed: clock_seed()[1],
             dt: 1.0,
             sea_level: 0.0,
             transform_threshold: 0.04,
