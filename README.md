@@ -10,11 +10,19 @@ effect is applied through a narrow distance falloff so features stay legible at
 this resolution. Geology accumulates over hundreds of small steps rather than a
 few large ones.
 
+![A generated world](docs/images/terrain.png)
+
+*Seed 42 after 400 steps. Mountain belts rim the western and southern edges of
+the main continent, where plates are converging; rivers drain off them into
+lakes and the sea.*
+
 ## Quick start
 
 ```sh
-cargo run --release -- --seed 7 --steps 400 --layers all --out out
+cargo run --release -- --seed 42 --steps 400 --layers all --out out
 ```
+
+That writes every debug layer for the world pictured above.
 
 ```
 --seed <N>           World seed (default 1)
@@ -33,19 +41,115 @@ about 25 seconds.
 
 ## Layers
 
-Each layer isolates one stage, so a bad-looking world can be traced to the stage
-that caused it rather than debugged through the final terrain.
+Every layer below is from one world - seed 42 after 400 steps - so they can be
+read against each other. Regenerate them with:
 
-| Layer | Shows |
-|---|---|
-| `terrain` | Hypsometric tint, hillshade, rivers and lakes |
-| `elevation` | Elevation alone, unshaded |
-| `plates` | Plate ownership, sites, velocity arrows |
-| `boundaries` | Classification: red convergent, blue divergent, green transform |
-| `strength` | Where deformation is being applied, and how hard |
-| `crust-age` | Young to old crust - shows seafloor spreading directly |
-| `rainfall` | Latitude bands, orographic gain and rain shadow |
-| `flow` | Flow accumulation on a log scale |
+```sh
+cargo run --release -- --seed 42 --steps 400 --layers all --out out
+```
+
+Each layer isolates one stage. The point is that when a world looks wrong, the
+question is *which stage* is wrong, and that is very hard to answer from the
+finished terrain alone.
+
+### `plates` - what is moving
+
+![Plate ownership](docs/images/plates.png)
+
+Plate ownership, one colour per plate. Pale fills are continental plates,
+saturated ones oceanic. The white dot is the plate's Voronoi site and the arrow
+is its velocity, with length proportional to speed.
+
+Read this first when a world looks wrong: if two neighbouring arrows point into
+each other you should find a mountain belt between them, and if they point apart
+you should find a rift. Note that the boundaries are visibly curved rather than
+straight - that is the domain warp described below.
+
+### `boundaries` - what the model decided
+
+![Boundary classification](docs/images/boundaries.png)
+
+Classification over dimmed terrain: **red convergent**, **blue divergent**,
+**green transform**. Brightness carries strength, so a fast boundary stands out
+from a barely-moving one of the same kind.
+
+This is the layer that answers "is the simulation deciding the right *kind* of
+boundary here?". Compare it against `plates`: the classification should follow
+the arrows. Compare it against `terrain`: red should coincide with mountains,
+blue with rifts and ridges. Transform boundaries appear where the relative
+motion runs along the boundary rather than across it, which is why they are
+comparatively rare.
+
+### `strength` - where deformation is going
+
+![Tectonic strength](docs/images/strength.png)
+
+Each boundary's strength carried through the same falloff the tectonics stage
+uses. Bright means "this is being actively deformed".
+
+This is the direct check on the design's central constraint (section 10): effects
+must not spread into plate interiors. The interiors here are **black** - not
+dim, but receiving nothing at all, because the falloff has a hard cutoff. If
+this layer ever fills in, the radii are too wide for the plate size and the
+world will turn to mush.
+
+### `crust-age` - the geological memory
+
+![Crust age](docs/images/crust-age.png)
+
+Young crust is bright, old crust is dark.
+
+This comes out as a seafloor-spreading map without being written as one: crust
+created at a divergent boundary starts at age zero, then ages as it moves away,
+so every spreading centre sits inside a bright band that is symmetric about its
+axis and darkens outward. Continental interiors are the oldest ground in the
+world. It is also the layer that shows plate motion *history* rather than the
+current instant, which makes it the best place to spot a plate that has been
+drifting wrongly for a long time.
+
+### `terrain` and `elevation` - the result
+
+![Elevation](docs/images/elevation.png)
+
+`elevation` is the raw heightfield under a hypsometric tint; `terrain` (at the
+top of this README) adds hillshade, rivers and lakes. Having both matters
+because hillshading is very good at hiding that terrain is actually flat, and
+very good at inventing detail that is not in the data.
+
+The pale halo around every coast is the continental shelf. The faint lines
+crossing the deep ocean are mid-ocean ridges standing above the abyssal plain.
+
+### `rainfall` - the climate input
+
+![Rainfall](docs/images/rainfall.png)
+
+Wet at the equator, dry through the subtropics, wet again along the mid-latitude
+storm tracks, dry at the poles.
+
+The latitude banding dominates at this scale; the orographic gain and rain
+shadow are the faint texture visible over mountain belts rather than the strong
+signal the bands are. If rivers are appearing where they should not, check here
+first - flow accumulation can only route water that rainfall put down.
+
+### `flow` - the drainage network
+
+![Flow accumulation](docs/images/flow.png)
+
+Flow accumulation on a log scale, with the sea masked out. Without the log, one
+trunk river saturates and every tributary disappears.
+
+Rivers are never drawn: this dendritic structure is what falls out of routing
+rainfall downhill over the heightfield. Use it to validate river formation
+before blaming the erosion stage for a bad-looking valley.
+
+**A known artifact is visible here.** Some channels run dead straight, at 45
+degrees or horizontally, across the flatter parts of the continent. That is D8
+routing over flats that the depression fill levelled: the epsilon tilt gives
+every cell somewhere to drain, but on a flat it points them all the same way, so
+they form parallel straight channels instead of a branching network. It shows up
+in the flow layer far more than in the finished terrain. Proper flat resolution
+(Garbrecht and Martz) would fix it.
+
 
 ## Using it as a library
 
