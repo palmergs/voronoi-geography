@@ -51,6 +51,8 @@ OPTIONS:
     --width <N>          World width, wraps east/west (default 1024)
     --height <N>         World height, walled north/south (default 512)
     --dt <F>             Geological time per iteration (default 1.0)
+    --sea-level <F>      Where the sea sits (default 0.0). Lower it to drain
+                         the world without changing the tectonics
     --erosion-every <N>  Run hydrology/erosion every N steps (default 2, 0 = off)
     --out <DIR>          Output directory (default ./out)
     --layers <A,B,...>   Layers to write, or 'all' (default terrain,plates,
@@ -188,6 +190,7 @@ fn parse_args() -> Result<Option<Args>, String> {
             "--width" => args.params.width = parse(&value()?, &arg)?,
             "--height" => args.params.height = parse(&value()?, &arg)?,
             "--dt" => args.params.dt = parse(&value()?, &arg)?,
+            "--sea-level" => args.params.sea_level = parse(&value()?, &arg)?,
             "--erosion-every" => args.params.erosion_interval = parse(&value()?, &arg)?,
             "--out" => args.out = PathBuf::from(value()?),
             "--snapshot-every" => args.snapshot_every = parse(&value()?, &arg)?,

@@ -18,7 +18,6 @@ use std::collections::BinaryHeap;
 
 #[derive(Clone, Copy, Debug)]
 pub struct HydrologyParams {
-    pub sea_level: f32,
     /// Rain that falls regardless of latitude.
     pub base_rainfall: f32,
     /// Extra rain where wind climbs terrain, and the rain shadow behind it.
@@ -34,7 +33,6 @@ pub struct HydrologyParams {
 impl Default for HydrologyParams {
     fn default() -> Self {
         HydrologyParams {
-            sea_level: 0.0,
             base_rainfall: 0.15,
             orographic_gain: 1.6,
             rain_shadow: 1.1,
@@ -67,12 +65,15 @@ impl FlowNetwork {
 
 pub struct Hydrology {
     pub params: HydrologyParams,
+    /// Owned by the simulation, not by this stage - see `SimulationParams`.
+    sea_level: f32,
     rain_noise: CylinderNoise,
 }
 
 impl Hydrology {
-    pub fn new(params: HydrologyParams, seed: u64, width: usize) -> Self {
+    pub fn new(params: HydrologyParams, sea_level: f32, seed: u64, width: usize) -> Self {
         Hydrology {
+            sea_level,
             rain_noise: CylinderNoise::new(
                 (seed as u32) ^ 0x_5A10_BEE5,
                 width,
@@ -104,11 +105,12 @@ impl Hydrology {
                 let mut rain = (band + p.rain_noise * n).max(0.0) + p.base_rainfall;
 
                 // Air arrives from upwind; compare terrain there to here.
-                if world.elevation[idx] > p.sea_level {
+                if world.elevation[idx] > self.sea_level {
                     let up = world
                         .neighbor(x, y, -wind.x.signum() as i64, 0)
                         .unwrap_or(idx);
-                    let climb = world.elevation[idx] - world.elevation[up].max(p.sea_level);
+                    let climb =
+                        world.elevation[idx] - world.elevation[up].max(self.sea_level);
                     if climb > 0.0 {
                         rain *= 1.0 + p.orographic_gain * smoothstep(0.0, 2.5, climb);
                     } else {
@@ -146,7 +148,7 @@ impl Hydrology {
         for idx in 0..n {
             let (_, y) = world.coords(idx);
             let is_edge = y == 0 || y == world.height - 1;
-            if world.elevation[idx] <= p.sea_level || is_edge {
+            if world.elevation[idx] <= self.sea_level || is_edge {
                 net.filled[idx] = world.elevation[idx];
                 water_level[idx] = world.elevation[idx];
                 queued[idx] = true;
@@ -181,7 +183,7 @@ impl Hydrology {
         // Steepest descent on the filled surface. Because of the epsilon tilt
         // every non-outlet cell has somewhere to go.
         for idx in 0..n {
-            if world.elevation[idx] <= p.sea_level {
+            if world.elevation[idx] <= self.sea_level {
                 net.receiver[idx] = -1;
                 world.water[idx] = 0.0;
                 continue;
@@ -292,7 +294,7 @@ mod tests {
     }
 
     fn hydro() -> Hydrology {
-        Hydrology::new(HydrologyParams::default(), 7, 64)
+        Hydrology::new(HydrologyParams::default(), 0.0, 7, 64)
     }
 
     #[test]
@@ -432,7 +434,7 @@ mod tests {
     #[test]
     fn rainfall_is_wet_at_the_equator_and_dry_in_the_subtropics() {
         let mut world = flat_world(64, 180, -1.0); // all ocean: no orography
-        let h = Hydrology::new(HydrologyParams::default(), 7, 64);
+        let h = Hydrology::new(HydrologyParams::default(), 0.0, 7, 64);
         h.rainfall(&mut world);
 
         let row_mean = |y: usize| {

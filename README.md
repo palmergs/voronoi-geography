@@ -31,6 +31,7 @@ That writes every debug layer for the world pictured above.
 --continental <F>    Fraction of the world that is continental crust (default 0.4)
 --width/--height     World size (default 1024 x 512)
 --dt <F>             Geological time per iteration (default 1.0)
+--sea-level <F>      Where the sea sits (default 0.0)
 --erosion-every <N>  Run hydrology/erosion every N steps (default 2, 0 = off)
 --layers <A,B,...>   Layers to write, or 'all'
 --snapshot-every <N> Also write numbered snapshots, for watching the history
@@ -38,6 +39,57 @@ That writes every debug layer for the world pictured above.
 
 Roughly 57 ms/step at full resolution with 32 plates, so a 400-step world takes
 about 25 seconds.
+
+## How much land?
+
+`--continental` is the dial. It sets what fraction of the world is continental
+crust, and land fraction follows it almost linearly - about six points below it.
+Measured at seed 42, 200 steps:
+
+| `--continental` | land |
+|---:|---:|
+| 0.3 | 27% |
+| 0.4 | 34% (default, roughly Earth) |
+| 0.5 | 43% |
+| 0.65 | 57% |
+| 0.8 | 73% |
+
+`--sea-level` also exists, but it is a trim rather than a dial: dropping it a
+full 3 units only takes the default world from 34% to 46% land. The reason is
+that hypsometry here is strongly bimodal - continents sit around +1 and ocean
+floor around -4, with little terrain in between - so moving sea level through
+that gap exposes continental shelf and not much else. Use it to nudge
+coastlines, not to drain an ocean.
+
+The two are not interchangeable, because `--continental` changes the geology and
+`--sea-level` does not. Raise the continental fraction and most plates become
+continental, so most convergent boundaries become continent/continent
+collisions: broad mountain belts, and far fewer trenches, volcanic arcs and
+island chains, since those all require an oceanic plate to subduct. Lower the sea
+instead and the tectonics are untouched - you get the same arcs and trenches,
+just with the water confined to the deepest basins.
+
+### Recipe for a land-heavy world
+
+```sh
+cargo run --release -- --continental 0.75 --plates 56 --steps 400
+```
+
+The plate count matters as much as the land fraction here. A land-heavy world
+has enormous continental interiors, and with only 32 plates those interiors sit
+far from any boundary and stay flat - which, per section 10, is exactly what
+the falloff is designed to guarantee. Raising the plate count puts more
+boundaries through the continents, and the relief follows:
+
+| | |
+|---|---|
+| ![32 plates](docs/images/land-32-plates.png) | ![56 plates](docs/images/land-56-plates.png) |
+| `--continental 0.8` with 32 plates: flat interiors, lakes scattered at random | `--continental 0.75 --plates 56`: ridges across the interior, lakes collecting between them |
+
+Expect lakes either way. A world with little ocean has few outlets for water to
+reach, so drainage ends in inland basins - which is realistic, but it does lean
+on the flat-routing weakness noted under the `flow` layer above.
+
 
 ## Layers
 

@@ -34,7 +34,6 @@ pub struct ErosionParams {
     pub diffusion: f32,
     /// Creep is slower under water, where there is no rain to drive it.
     pub submarine_diffusion_scale: f32,
-    pub sea_level: f32,
 }
 
 impl Default for ErosionParams {
@@ -47,7 +46,6 @@ impl Default for ErosionParams {
             deposition: 0.08,
             diffusion: 0.022,
             submarine_diffusion_scale: 0.25,
-            sea_level: 0.0,
         }
     }
 }
@@ -63,6 +61,8 @@ pub struct ErosionBudget {
 
 pub struct Erosion {
     pub params: ErosionParams,
+    /// Owned by the simulation, not by this stage - see `SimulationParams`.
+    sea_level: f32,
     /// Scratch, kept across steps to avoid reallocating every iteration.
     cut: Vec<f32>,
     carry: Vec<f32>,
@@ -70,9 +70,10 @@ pub struct Erosion {
 }
 
 impl Erosion {
-    pub fn new(params: ErosionParams, n: usize) -> Self {
+    pub fn new(params: ErosionParams, sea_level: f32, n: usize) -> Self {
         Erosion {
             params,
+            sea_level,
             cut: vec![0.0; n],
             carry: vec![0.0; n],
             scratch: vec![0.0; n],
@@ -90,6 +91,7 @@ impl Erosion {
     /// Stream-power incision: `k * discharge^m * slope^n`, clamped for stability.
     fn incise(&mut self, world: &mut World, net: &FlowNetwork, dt: f32, budget: &mut ErosionBudget) {
         let p = &self.params;
+        let sea = self.sea_level;
         let elevation = &world.elevation;
         let flow = &world.flow;
         let water = &world.water;
@@ -102,7 +104,7 @@ impl Erosion {
                 let r = net.receiver[idx];
                 // No rivers below sea level, and none inside a lake - still
                 // water does not incise.
-                if r < 0 || elevation[idx] <= p.sea_level || water[idx] > 0.0 {
+                if r < 0 || elevation[idx] <= sea || water[idx] > 0.0 {
                     return;
                 }
                 let r = r as usize;
@@ -185,6 +187,7 @@ impl Erosion {
     /// Hillslope creep: nudge each cell toward the average of its neighbours.
     fn diffuse(&mut self, world: &mut World, dt: f32) {
         let p = &self.params;
+        let sea = self.sea_level;
         if p.diffusion <= 0.0 {
             return;
         }
@@ -206,7 +209,7 @@ impl Erosion {
                     return;
                 }
                 let mean = sum / n;
-                let rate = if elevation[idx] > p.sea_level {
+                let rate = if elevation[idx] > sea {
                     p.diffusion
                 } else {
                     p.diffusion * p.submarine_diffusion_scale
@@ -235,7 +238,7 @@ mod tests {
     }
 
     fn route(world: &mut World) -> FlowNetwork {
-        let hydro = Hydrology::new(HydrologyParams::default(), 5, world.width);
+        let hydro = Hydrology::new(HydrologyParams::default(), 0.0, 5, world.width);
         let mut net = FlowNetwork::new(world.len());
         hydro.rainfall(world);
         hydro.route(world, &mut net);
@@ -246,7 +249,7 @@ mod tests {
     fn rivers_cut_down_into_a_slope() {
         let mut world = ramp(64, 48);
         let before = world.clone();
-        let mut erosion = Erosion::new(ErosionParams::default(), world.len());
+        let mut erosion = Erosion::new(ErosionParams::default(), 0.0, world.len());
         for _ in 0..20 {
             let net = route(&mut world);
             erosion.apply(&mut world, &net, 1.0);
@@ -263,7 +266,7 @@ mod tests {
     #[test]
     fn bigger_rivers_cut_deeper() {
         let mut world = ramp(64, 48);
-        let mut erosion = Erosion::new(ErosionParams::default(), world.len());
+        let mut erosion = Erosion::new(ErosionParams::default(), 0.0, world.len());
         // Let a drainage network develop first.
         for _ in 0..20 {
             let net = route(&mut world);
@@ -300,6 +303,7 @@ mod tests {
                 diffusion: 0.0, // creep moves material too; isolate the rivers
                 ..Default::default()
             },
+            0.0,
             world.len(),
         );
         for _ in 0..10 {
@@ -329,7 +333,7 @@ mod tests {
                 world.elevation[i] = 1.0;
             }
         }
-        let mut erosion = Erosion::new(ErosionParams::default(), world.len());
+        let mut erosion = Erosion::new(ErosionParams::default(), 0.0, world.len());
         for _ in 0..30 {
             let net = route(&mut world);
             erosion.apply(&mut world, &net, 1.0);
@@ -357,6 +361,7 @@ mod tests {
                 diffusion: 0.0,
                 ..Default::default()
             },
+            0.0,
             world.len(),
         );
         for _ in 0..15 {
@@ -387,6 +392,7 @@ mod tests {
                 diffusion: 0.2,
                 ..Default::default()
             },
+            0.0,
             world.len(),
         );
         for _ in 0..20 {
@@ -399,7 +405,7 @@ mod tests {
     #[test]
     fn stays_stable_under_long_runs() {
         let mut world = ramp(64, 48);
-        let mut erosion = Erosion::new(ErosionParams::default(), world.len());
+        let mut erosion = Erosion::new(ErosionParams::default(), 0.0, world.len());
         for _ in 0..200 {
             let net = route(&mut world);
             erosion.apply(&mut world, &net, 1.0);
@@ -414,8 +420,8 @@ mod tests {
     fn erosion_is_deterministic() {
         let mut a = ramp(48, 32);
         let mut b = a.clone();
-        let mut ea = Erosion::new(ErosionParams::default(), a.len());
-        let mut eb = Erosion::new(ErosionParams::default(), b.len());
+        let mut ea = Erosion::new(ErosionParams::default(), 0.0, a.len());
+        let mut eb = Erosion::new(ErosionParams::default(), 0.0, b.len());
         for _ in 0..10 {
             let na = route(&mut a);
             ea.apply(&mut a, &na, 1.0);

@@ -22,6 +22,14 @@ pub struct SimulationParams {
     pub seed: u64,
     /// Geological time per iteration. Everything scales by this.
     pub dt: f32,
+    /// Where the sea sits. This is the single source of truth: hydrology,
+    /// erosion, the land/sea statistics and every renderer read it from here,
+    /// so there is no way for two stages to disagree about what is underwater.
+    ///
+    /// Lowering it drains the world without touching the tectonics, which is
+    /// the difference between a land-heavy world that still has trenches and
+    /// island arcs, and one made of wall-to-wall continental crust.
+    pub sea_level: f32,
     /// Normal-motion magnitude below which a boundary counts as transform.
     pub transform_threshold: f32,
     /// Run hydrology and erosion every N tectonic steps. Water works far
@@ -60,6 +68,7 @@ impl Default for SimulationParams {
             height: DEFAULT_HEIGHT,
             seed: 1,
             dt: 1.0,
+            sea_level: 0.0,
             transform_threshold: 0.04,
             erosion_interval: 2,
 
@@ -174,8 +183,9 @@ impl Simulation {
         }
 
         let tectonics = Tectonics::new(params.tectonics, params.seed, params.width);
-        let hydrology = Hydrology::new(params.hydrology, params.seed, params.width);
-        let erosion = Erosion::new(params.erosion, world.len());
+        let hydrology =
+            Hydrology::new(params.hydrology, params.sea_level, params.seed, params.width);
+        let erosion = Erosion::new(params.erosion, params.sea_level, world.len());
         let boundaries = boundary::detect(&world, &plates, params.transform_threshold);
         let field = boundary::nearest_boundary(&world, &boundaries, tectonics.max_radius());
         let net = FlowNetwork::new(world.len());
@@ -285,7 +295,7 @@ impl Simulation {
                 BoundaryKind::Transform => stats.transform += 1,
             }
         }
-        let sea = self.params.hydrology.sea_level;
+        let sea = self.params.sea_level;
         let mut land = 0usize;
         for &e in &self.world.elevation {
             stats.min_elevation = stats.min_elevation.min(e);
@@ -299,7 +309,7 @@ impl Simulation {
     }
 
     pub fn sea_level(&self) -> f32 {
-        self.params.hydrology.sea_level
+        self.params.sea_level
     }
 }
 
@@ -406,6 +416,32 @@ mod tests {
         );
         assert!(sim.totals.eroded > 0.0, "erosion never ran");
         assert!(sim.totals.deposited > 0.0, "nothing was ever deposited");
+    }
+
+    #[test]
+    fn sea_level_moves_the_coastline_without_touching_the_tectonics() {
+        // Same seed and the same plates, but a lower sea: strictly more land,
+        // and the terrain itself is not rebuilt around the new coastline.
+        let mut normal = Simulation::new(small(7));
+        let mut drained = Simulation::new(SimulationParams {
+            sea_level: -1.5,
+            ..small(7)
+        });
+        normal.run(40);
+        drained.run(40);
+
+        assert!(
+            drained.stats.land_fraction > normal.stats.land_fraction,
+            "lowering the sea should expose land: {} vs {}",
+            drained.stats.land_fraction,
+            normal.stats.land_fraction
+        );
+        assert_eq!(
+            normal.world.plate_id, drained.world.plate_id,
+            "sea level must not change which plate owns what"
+        );
+        assert_eq!(normal.sea_level(), 0.0);
+        assert_eq!(drained.sea_level(), -1.5);
     }
 
     #[test]
