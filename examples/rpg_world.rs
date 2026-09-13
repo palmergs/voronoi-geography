@@ -6,10 +6,10 @@
 //! cargo run --release --example rpg_world
 //! ```
 
-use voronoi_geography::boundary::BoundaryKind;
-use voronoi_geography::plate::{CrustType, PlateParams};
-use voronoi_geography::query::Sample;
-use voronoi_geography::simulation::{Simulation, SimulationParams};
+use voronoi_geology::boundary::BoundaryKind;
+use voronoi_geology::plate::{CrustType, PlateParams};
+use voronoi_geology::query::Sample;
+use voronoi_geology::simulation::{Simulation, SimulationParams};
 
 fn main() {
     // 1. Generate. Everything derives from the seed, so storing the seed and

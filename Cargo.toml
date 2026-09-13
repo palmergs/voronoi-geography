@@ -1,14 +1,14 @@
 [package]
-name = "voronoi-geography"
+name = "voronoi-geology"
 version = "0.1.0"
 edition = "2024"
 
 [lib]
-name = "voronoi_geography"
+name = "voronoi_geology"
 path = "src/lib.rs"
 
 [[bin]]
-name = "voronoi-geography"
+name = "voronoi-geology"
 path = "src/main.rs"
 
 [dependencies]

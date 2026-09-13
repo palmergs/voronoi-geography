@@ -1,4 +1,4 @@
-# voronoi-geography
+# voronoi-geology
 
 A game-oriented plate tectonics world simulation, implementing
 [`docs/plate-tectonics-world-sim-project-design.md`](docs/plate-tectonics-world-sim-project-design.md).
@@ -158,11 +158,11 @@ once, keep it in memory, and query it for the life of a game.
 
 ```toml
 [dependencies]
-voronoi-geography = { path = "../voronoi-geography" }
+voronoi-geology = { path = "../voronoi-geology" }
 ```
 
 ```rust
-use voronoi_geography::simulation::{Simulation, SimulationParams};
+use voronoi_geology::simulation::{Simulation, SimulationParams};
 
 let mut world = Simulation::new(SimulationParams {
     seed: 20_260_912,

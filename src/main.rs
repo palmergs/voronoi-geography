@@ -3,10 +3,10 @@
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
-use voronoi_geography::plate::PlateParams;
-use voronoi_geography::render::{self, Layer};
-use voronoi_geography::simulation::{Simulation, SimulationParams};
-use voronoi_geography::world::{DEFAULT_HEIGHT, DEFAULT_WIDTH};
+use voronoi_geology::plate::PlateParams;
+use voronoi_geology::render::{self, Layer};
+use voronoi_geology::simulation::{Simulation, SimulationParams};
+use voronoi_geology::world::{DEFAULT_HEIGHT, DEFAULT_WIDTH};
 
 struct Args {
     params: SimulationParams,
@@ -38,10 +38,10 @@ impl Default for Args {
 }
 
 const USAGE: &str = "\
-voronoi-geography - plate tectonics world simulation
+voronoi-geology - plate tectonics world simulation
 
 USAGE:
-    voronoi-geography [OPTIONS]
+    voronoi-geology [OPTIONS]
 
 OPTIONS:
     --seed <N>           World seed (default 1)
