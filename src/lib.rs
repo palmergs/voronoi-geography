@@ -18,3 +18,4 @@ pub mod hydrology;
 pub mod erosion;
 pub mod simulation;
 pub mod render;
+pub mod query;

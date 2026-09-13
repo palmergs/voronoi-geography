@@ -106,6 +106,12 @@ impl World {
         self.delta(ax, ay, bx, by).length_squared()
     }
 
+    /// Latitude of a row, in degrees: +90 at the north wall, -90 at the south.
+    #[inline]
+    pub fn latitude(&self, y: usize) -> f32 {
+        (0.5 - (y as f32 + 0.5) / self.height as f32) * 180.0
+    }
+
     /// Clamp a position to the world: wrap x, keep y inside the walls.
     pub fn contain(&self, p: Vec2) -> Vec2 {
         let w = self.width as f32;
@@ -195,6 +201,14 @@ mod tests {
         let w = w();
         let d = w.delta(0.0, 1.0, 15.0, 1.0);
         assert_eq!(d.x, 1.0);
+    }
+
+    #[test]
+    fn latitude_runs_pole_to_pole() {
+        let w = World::new(4, 180);
+        assert!((w.latitude(0) - 89.5).abs() < 0.01);
+        assert!((w.latitude(90) + 0.5).abs() < 0.01);
+        assert!((w.latitude(179) + 89.5).abs() < 0.01);
     }
 
     #[test]

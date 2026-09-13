@@ -43,6 +43,24 @@ pub fn bump(x: f32, center: f32, sigma: f32) -> f32 {
     (-0.5 * t * t).exp()
 }
 
+/// Value at a given quantile of `data`.
+///
+/// Used to auto-scale things to a world's own range without letting a single
+/// outlier cell flatten everything else - a river threshold, a colour ramp.
+/// Runs in O(n) and ignores non-finite values.
+pub fn percentile(data: &[f32], q: f32) -> f32 {
+    if data.is_empty() {
+        return 0.0;
+    }
+    let mut v: Vec<f32> = data.iter().copied().filter(|f| f.is_finite()).collect();
+    if v.is_empty() {
+        return 0.0;
+    }
+    let k = ((v.len() - 1) as f32 * q.clamp(0.0, 1.0)).round() as usize;
+    let (_, nth, _) = v.select_nth_unstable_by(k, f32::total_cmp);
+    *nth
+}
+
 /// Unit vector, or zero for a degenerate input.
 #[inline]
 pub fn normalize_or_zero(v: Vec2) -> Vec2 {
@@ -58,6 +76,16 @@ mod tests {
         assert_eq!(wrap_delta(1.0, 1023.0, 1024.0), 2.0);
         assert_eq!(wrap_delta(1023.0, 1.0, 1024.0), -2.0);
         assert_eq!(wrap_delta(10.0, 4.0, 1024.0), 6.0);
+    }
+
+    #[test]
+    fn percentile_ignores_outliers() {
+        let data: Vec<f32> = (0..100).map(|i| i as f32).collect();
+        assert_eq!(percentile(&data, 0.0), 0.0);
+        assert_eq!(percentile(&data, 0.5), 50.0);
+        assert_eq!(percentile(&data, 1.0), 99.0);
+        assert_eq!(percentile(&[], 0.5), 0.0);
+        assert_eq!(percentile(&[f32::NAN, 3.0], 1.0), 3.0);
     }
 
     #[test]

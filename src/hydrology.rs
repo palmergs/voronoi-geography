@@ -92,10 +92,9 @@ impl Hydrology {
     /// which is why mountain ranges end up with a wet and a dry flank.
     pub fn rainfall(&self, world: &mut World) {
         let p = &self.params;
-        let h = world.height as f32;
 
         for y in 0..world.height {
-            let lat = (0.5 - (y as f32 + 0.5) / h) * 180.0;
+            let lat = world.latitude(y);
             let band = latitude_rainfall(lat);
             let wind = prevailing_wind(lat);
 

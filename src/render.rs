@@ -7,7 +7,7 @@
 //! final terrain.
 
 use crate::boundary::BoundaryKind;
-use crate::math::{Vec2, smoothstep};
+use crate::math::{Vec2, percentile, smoothstep};
 use crate::simulation::Simulation;
 use crate::tectonics::falloff;
 use image::{Rgb, RgbImage};
@@ -314,21 +314,6 @@ fn hsv(h: f32, s: f32, v: f32) -> [u8; 3] {
     ]
 }
 
-/// Value at a given quantile, for auto-scaling a layer without letting one
-/// outlier cell flatten everything else.
-fn percentile(data: &[f32], q: f32) -> f32 {
-    if data.is_empty() {
-        return 0.0;
-    }
-    let mut v: Vec<f32> = data.iter().copied().filter(|f| f.is_finite()).collect();
-    if v.is_empty() {
-        return 0.0;
-    }
-    let k = ((v.len() - 1) as f32 * q.clamp(0.0, 1.0)).round() as usize;
-    let (_, nth, _) = v.select_nth_unstable_by(k, f32::total_cmp);
-    *nth
-}
-
 // --- drawing --------------------------------------------------------------
 
 fn draw_arrow(img: &mut RgbImage, from: Vec2, to: Vec2, color: [u8; 3], width: f32) {
@@ -535,11 +520,4 @@ mod tests {
         assert_eq!(img.get_pixel(30, 0), &Rgb([0, 255, 0]));
     }
 
-    #[test]
-    fn percentile_ignores_outliers() {
-        let data: Vec<f32> = (0..100).map(|i| i as f32).collect();
-        assert_eq!(percentile(&data, 0.0), 0.0);
-        assert_eq!(percentile(&data, 0.5), 50.0);
-        assert_eq!(percentile(&data, 1.0), 99.0);
-    }
 }

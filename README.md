@@ -47,6 +47,135 @@ that caused it rather than debugged through the final terrain.
 | `rainfall` | Latitude bands, orographic gain and rain shadow |
 | `flow` | Flow accumulation on a log scale |
 
+## Using it as a library
+
+The CLI is a thin wrapper. The crate is meant to be embedded: generate a world
+once, keep it in memory, and query it for the life of a game.
+
+```toml
+[dependencies]
+voronoi-geography = { path = "../voronoi-geography" }
+```
+
+```rust
+use voronoi_geography::simulation::{Simulation, SimulationParams};
+
+let mut world = Simulation::new(SimulationParams {
+    seed: 20_260_912,
+    ..Default::default()
+});
+world.run(400);          // about 23 seconds at the default 1024x512
+```
+
+After `run`, nothing more needs to happen to it. `Simulation` is `Send + Sync`,
+so it can be shared across threads behind an `Arc`.
+
+### Asking about a place
+
+```rust
+let s = world.sample(512, 256);
+
+s.elevation      // height relative to sea level; sea_level is 0.0
+s.crust          // CrustType::Continental or ::Oceanic, from the owning plate
+s.crust_age      // time since this crust formed; low near spreading centres
+s.rainfall       // relative, not millimetres
+s.flow           // upstream rainfall arriving here - a river, if large
+s.lake_depth     // standing water above the terrain
+s.sediment       // deposited over the world's history
+s.latitude       // +90 at the north wall, -90 at the south
+s.plate          // which plate holds this cell
+s.plate_velocity // and where it is heading
+
+s.is_land()      // elevation above sea level
+s.altitude()     // height above sea level, 0 at sea
+s.depth()        // depth below sea level, 0 on land
+s.is_lake()
+
+// The boundary currently shaping this cell, if it is near one at all.
+// `None` means stable plate interior.
+if let Some(b) = s.boundary {
+    b.kind        // Convergent, Divergent or Transform
+    b.distance    // in cells
+    b.strength    // how hard it is working
+    b.plates      // the two plates that meet here
+}
+```
+
+`sample(x, y)` panics outside the world. For coordinates that might run off a
+region, use `sample_at(x: i64, y: i64)`, which wraps x around the cylinder and
+returns `None` past the northern and southern walls:
+
+```rust
+match world.sample_at(x, y) {
+    Some(s) => ...,
+    None => ...,   // off the top or bottom of the world
+}
+```
+
+If your game's coordinates are finer than one cell, `elevation_at(x: f32, y: f32)`
+interpolates. Only elevation is interpolated: crust type and plate id are
+categorical, and blending rainfall or flow would invent water that is not there.
+
+### Rivers
+
+Flow accumulation is a continuous quantity, so "is this a river" needs a
+threshold. `river_threshold()` derives one from the world's own distribution
+rather than a fixed number, since total flow scales with world size and
+rainfall:
+
+```rust
+let threshold = world.river_threshold();     // O(cells) - hoist it out of loops
+for r in world.rivers(threshold) { ... }     // land cells at or above it
+```
+
+### Bulk access
+
+`sample` is for asking about one place. Building a tile map, exporting a
+heightmap or scanning for sites should read the flat arrays directly - they are
+public, and iterating them is far faster than sampling cell by cell:
+
+```rust
+let sea = world.sea_level();
+let land = world.world.elevation.iter().filter(|e| **e > sea).count();
+```
+
+`world.world` is the [`World`](src/world.rs): `elevation`, `rainfall`, `water`,
+`flow`, `sediment`, `crust_age` and `plate_id`, each a flat `Vec` indexed by
+`y * width + x` (use `world.world.idx(x, y)`). `world.plates`,
+`world.boundaries` and `world.field` (the boundary distance field) are public
+too.
+
+A full worked example is in [`examples/rpg_world.rs`](examples/rpg_world.rs):
+
+```sh
+cargo run --release --example rpg_world
+```
+
+### Units and coordinates
+
+- **Elevation** is not metres. Sea level is 0.0, ocean basins bottom out around
+  -7 and the highest peaks reach about +8, so one unit is roughly a kilometre if
+  you want a mental scale.
+- **Rainfall and flow** are relative. Compare cells to each other rather than
+  reading an absolute figure off them.
+- **Crust age** is in units of simulation time: `steps x dt`.
+- **x wraps, y does not.** East/west is a cylinder; north and south are walls.
+  Any arithmetic on x needs `wrap_x`, and there is no cell beyond either wall.
+
+### Memory and persistence
+
+A finished 1024x512 world retains about 33 MB of field data. Peak usage while
+stepping is roughly double that, for per-step scratch buffers that are freed
+again; measured peak for a default world is around 70 MB. Both scale linearly
+with cell count, so a 512x256 world is a quarter of it.
+
+There is no serialisation yet. The world is fully determined by its
+`SimulationParams` and step count, so the cheapest way to persist one is to
+store the seed and parameters and regenerate - but that costs the full
+generation time on load, so a game that cannot afford ~25 seconds at startup
+will want to add serde to `World` and save the fields.
+
+
 ## Modules
 
 | Module | Role | Design doc |
@@ -60,6 +189,7 @@ that caused it rather than debugged through the final terrain.
 | `erosion` | Incision, sediment transport, hillslope creep | 17 |
 | `simulation` | The iteration order and the parameter set | 18 |
 | `render` | Debug and terrain layers | 23 |
+| `query` | Point queries for embedding in a game | - |
 | `noise`, `math` | Seeded noise, cylinder math | - |
 
 Everything is deterministic: the same seed always produces the same world.
@@ -122,7 +252,7 @@ that reads as a rift or a suture.
 cargo test
 ```
 
-76 tests. The interesting ones assert geological behaviour rather than
+85 tests. The interesting ones assert geological behaviour rather than
 implementation details: that continental collision lifts both sides while
 ocean/continent convergence digs a trench on one side and builds a cordillera on
 the other, that a mid-ocean ridge stands above its flanks while a continental
